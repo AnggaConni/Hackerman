@@ -1,0 +1,450 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NEXUS - Visual Node</title>
+    <style>
+        :root {
+            --bg-color: #000000;
+            --main-cyan: #00f3ff;
+            --main-lime: #39ff14;
+            --main-red: #ff003c;
+            --font-main: 'Consolas', 'Courier New', monospace;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--main-cyan);
+            font-family: var(--font-main);
+            height: 100vh;
+            overflow: hidden;
+            position: relative;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        /* Matrix Background */
+        #matrix-canvas {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            z-index: 1;
+            opacity: 0.6;
+        }
+
+        /* Scanlines Overlay */
+        body::after {
+            content: " ";
+            display: block;
+            position: absolute;
+            top: 0; left: 0; bottom: 0; right: 0;
+            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%);
+            z-index: 100;
+            background-size: 100% 2px;
+            pointer-events: none;
+        }
+
+        /* TACTICAL UI WRAPPER */
+        .ui-layer {
+            position: relative;
+            z-index: 10;
+            width: 100%; height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: 30px;
+            pointer-events: none; /* Let clicks pass through if needed */
+        }
+
+        /* HUD Header */
+        .hud-header {
+            display: flex;
+            justify-content: space-between;
+            font-size: 1.2rem;
+            font-weight: bold;
+            text-shadow: 0 0 10px var(--main-cyan);
+            border-bottom: 2px solid rgba(0, 243, 255, 0.3);
+            padding-bottom: 10px;
+        }
+
+        #sys-status { color: var(--main-red); animation: blink 1s infinite; }
+        #sys-status.linked { color: var(--main-lime); animation: none; text-shadow: 0 0 10px var(--main-lime); }
+
+        /* RADAR SYSTEM */
+        .radar-container {
+            position: absolute;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            width: 500px; height: 500px;
+            border-radius: 50%;
+            border: 2px solid rgba(0, 243, 255, 0.2);
+            z-index: 5;
+            box-shadow: inset 0 0 50px rgba(0, 243, 255, 0.1);
+        }
+        
+        .radar-core {
+            position: absolute;
+            top: 50%; left: 50%;
+            width: 20px; height: 20px;
+            background: var(--main-cyan);
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            box-shadow: 0 0 20px var(--main-cyan);
+            animation: pulse 2s infinite;
+        }
+
+        .radar-sweep {
+            position: absolute;
+            top: 50%; left: 50%;
+            width: 250px; height: 250px;
+            background: conic-gradient(from 0deg, rgba(0, 243, 255, 0) 70%, rgba(0, 243, 255, 0.6) 100%);
+            transform-origin: 0% 0%;
+            border-radius: 100% 0 0 0;
+            animation: spin 4s linear infinite;
+        }
+
+        .radar-grid {
+            position: absolute;
+            width: 100%; height: 100%;
+            border-radius: 50%;
+            background: 
+                linear-gradient(rgba(0,243,255,0.2) 1px, transparent 1px) 50% 50% / 50px 50px,
+                linear-gradient(90deg, rgba(0,243,255,0.2) 1px, transparent 1px) 50% 50% / 50px 50px;
+            border: 1px solid var(--main-cyan);
+            opacity: 0.3;
+        }
+
+        /* TYPING DATA STREAM (Kiri Bawah) */
+        .data-stream {
+            position: absolute;
+            bottom: 30px; left: 30px;
+            width: 300px; height: 200px;
+            background: rgba(0, 0, 0, 0.7);
+            border: 1px solid var(--main-cyan);
+            padding: 10px;
+            font-size: 0.8rem;
+            color: var(--main-lime);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-end;
+        }
+
+        /* --- MODAL ATTACK & WARNING --- */
+        .modal-overlay {
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0, 0, 0, 0.9);
+            z-index: 50;
+            display: none;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+        }
+
+        .modal-box {
+            width: 800px;
+            border: 3px solid var(--main-red);
+            background: rgba(20, 0, 0, 0.9);
+            padding: 40px;
+            text-align: center;
+            box-shadow: 0 0 50px rgba(255, 0, 60, 0.5);
+        }
+
+        .modal-title {
+            font-size: 3rem; color: var(--main-red); margin-bottom: 20px;
+            text-shadow: 0 0 20px var(--main-red);
+            animation: glitch 0.2s infinite;
+        }
+
+        .progress-container {
+            width: 100%; height: 40px;
+            border: 2px solid var(--main-red);
+            margin: 30px 0; position: relative;
+        }
+        
+        .progress-bar {
+            height: 100%; width: 0%;
+            background: var(--main-red);
+            transition: width 0.1s linear;
+        }
+
+        .modal-details { font-size: 1.5rem; color: #fff; margin-bottom: 10px; }
+
+        /* WARNING MODE */
+        body.warning-mode { background: #330000; animation: flash-bg 0.5s infinite; }
+        body.warning-mode #matrix-canvas { filter: hue-rotate(150deg); opacity: 1; }
+
+        /* KEYFRAMES */
+        @keyframes spin { 100% { transform: rotate(360deg); } }
+        @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
+        @keyframes pulse { 0% { transform: translate(-50%, -50%) scale(1); } 50% { transform: translate(-50%, -50%) scale(1.5); box-shadow: 0 0 30px var(--main-cyan); } 100% { transform: translate(-50%, -50%) scale(1); } }
+        @keyframes flash-bg { 0%, 100% { background: #330000; } 50% { background: #ff0000; } }
+        @keyframes glitch {
+            0% { transform: translate(0) }
+            20% { transform: translate(-3px, 3px) }
+            40% { transform: translate(-3px, -3px) }
+            60% { transform: translate(3px, 3px) }
+            80% { transform: translate(3px, -3px) }
+            100% { transform: translate(0) }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Latar Belakang Matrix -->
+    <canvas id="matrix-canvas"></canvas>
+
+    <!-- Radar di Tengah Layar -->
+    <div class="radar-container" id="main-radar">
+        <div class="radar-grid"></div>
+        <div class="radar-sweep"></div>
+        <div class="radar-core"></div>
+    </div>
+
+    <!-- UI Overlay Transparan -->
+    <div class="ui-layer">
+        <div class="hud-header">
+            <div>NODE: ALPHA_01</div>
+            <div>STATUS: <span id="sys-status">AWAITING LINK...</span></div>
+            <div id="clock">00:00:00</div>
+        </div>
+
+        <div class="data-stream" id="data-stream">
+            <div style="color: var(--main-cyan)">> WAITING FOR INPUT STREAM...</div>
+        </div>
+    </div>
+
+    <!-- MODAL ATTACK SEQUENCE -->
+    <div class="modal-overlay" id="attack-modal">
+        <div class="modal-box">
+            <div class="modal-title">SYSTEM COMPROMISE INITIATED</div>
+            <div class="modal-details" id="attack-target">TARGET: UNKNOWN</div>
+            <div class="modal-details" id="attack-method" style="color: var(--main-yellow)">METHOD: UNKNOWN</div>
+            
+            <div class="progress-container">
+                <div class="progress-bar" id="attack-progress"></div>
+            </div>
+            
+            <div class="modal-details" id="attack-status" style="font-size: 1.2rem; color: var(--main-cyan);">
+                ESTABLISHING CONNECTION...
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL GLOBAL WARNING -->
+    <div class="modal-overlay" id="warning-modal" style="background: rgba(255,0,0,0.2);">
+        <div class="modal-title" style="font-size: 5rem;">CRITICAL ALERT</div>
+        <div class="modal-details" style="font-size: 2rem;">SELF DESTRUCT SEQUENCE ARMED</div>
+        <div class="modal-details" id="countdown" style="font-size: 4rem; color: white; margin-top: 20px;">10.00</div>
+    </div>
+
+    <script>
+        /* =========================================
+           1. MATRIX DIGITAL RAIN (CANVAS)
+           ========================================= */
+        const canvas = document.getElementById('matrix-canvas');
+        const ctx = canvas.getContext('2d');
+        
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+
+        const katakana = 'ｱｲｳｴｵｶｷｸｹｺｻｼｽｾｿﾀﾁﾂﾃﾄﾅﾆﾇﾈﾉﾊﾋﾌﾍﾎﾏﾐﾑﾒﾓﾔﾕﾖﾗﾘﾙﾚﾛﾜﾝ';
+        const latin = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+        const nums = '0123456789';
+        const alphabet = katakana + latin + nums;
+
+        const fontSize = 16;
+        const columns = canvas.width / fontSize;
+        const drops = [];
+        for(let x = 0; x < columns; x++) drops[x] = 1;
+
+        let matrixSpeed = 50; // Normal speed
+        let matrixInterval;
+
+        function drawMatrix() {
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.05)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // Ubah warna menjadi merah jika mode warning aktif
+            ctx.fillStyle = document.body.classList.contains('warning-mode') ? '#ff003c' : '#00f3ff';
+            ctx.font = fontSize + 'px monospace';
+
+            for(let i = 0; i < drops.length; i++) {
+                const text = alphabet.charAt(Math.floor(Math.random() * alphabet.length));
+                ctx.fillText(text, i * fontSize, drops[i] * fontSize);
+                
+                if(drops[i] * fontSize > canvas.height && Math.random() > 0.975)
+                    drops[i] = 0;
+                drops[i]++;
+            }
+        }
+
+        function runMatrix() {
+            clearInterval(matrixInterval);
+            matrixInterval = setInterval(drawMatrix, matrixSpeed);
+        }
+        runMatrix();
+
+        // Handle resize
+        window.addEventListener('resize', () => {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        });
+
+        /* =========================================
+           2. KOMUNIKASI BROADCAST CHANNEL
+           ========================================= */
+        const channel = new BroadcastChannel('nexus_comms');
+        const statusEl = document.getElementById('sys-status');
+        const streamEl = document.getElementById('data-stream');
+        let typingTimeout;
+
+        channel.onmessage = (event) => {
+            const msg = event.data;
+
+            // 2A. Menerima PING dari Layar Kiri
+            if (msg.type === 'PING') {
+                statusEl.innerText = "LINKED TO NEXUS_CORE";
+                statusEl.classList.add('linked');
+                // Balas ke layar kiri bahwa koneksi berhasil
+                channel.postMessage({ type: 'PONG' });
+            }
+            
+            // 2B. Merespons Ketikan (Typing) dari Layar Kiri
+            else if (msg.type === 'TYPING') {
+                // Percepat matrix rain sesaat
+                matrixSpeed = 15;
+                runMatrix();
+                clearTimeout(typingTimeout);
+                typingTimeout = setTimeout(() => { matrixSpeed = 50; runMatrix(); }, 300);
+
+                // Tambahkan data acak ke Stream Box
+                const hex = Math.floor(Math.random()*16777215).toString(16).toUpperCase();
+                const div = document.createElement('div');
+                div.innerText = `> BYPASS_SEQ_${hex} ... OK`;
+                streamEl.appendChild(div);
+                if(streamEl.childElementCount > 10) streamEl.removeChild(streamEl.firstChild);
+            }
+
+            // 2C. Meluncurkan Serangan (Payload)
+            else if (msg.type === 'LAUNCH_ATTACK') {
+                triggerAttackSequence(msg.payload);
+            }
+
+            // 2D. Peringatan Global (Self Destruct)
+            else if (msg.type === 'GLOBAL_WARNING') {
+                triggerGlobalWarning();
+            }
+        };
+
+        /* =========================================
+           3. SISTEM SERANGAN (ATTACK SEQUENCE)
+           ========================================= */
+        function triggerAttackSequence(payload) {
+            const modal = document.getElementById('attack-modal');
+            const targetEl = document.getElementById('attack-target');
+            const methodEl = document.getElementById('attack-method');
+            const statusEl = document.getElementById('attack-status');
+            const bar = document.getElementById('attack-progress');
+            const radar = document.getElementById('main-radar');
+
+            // Sembunyikan radar sementara
+            radar.style.display = 'none';
+            modal.style.display = 'flex';
+            bar.style.width = '0%';
+            
+            targetEl.innerText = `TARGET: ${payload.ip} [${payload.name}]`;
+            methodEl.innerText = `METHOD: ${payload.method} | ENCRYPTION: ${payload.encryption}`;
+            
+            let progress = 0;
+            statusEl.innerText = "ESTABLISHING SECURE CONNECTION...";
+            statusEl.style.color = "var(--main-cyan)";
+            
+            // Kirim log awal ke layar kiri
+            channel.postMessage({ type: 'ATTACK_STATUS', status: `Initiating handshake with ${payload.ip}...` });
+
+            const attackInterval = setInterval(() => {
+                progress += Math.random() * 5;
+                if(progress > 100) progress = 100;
+                bar.style.width = progress + '%';
+
+                // Ubah status berdasarkan progress & kabari layar kiri
+                if (progress > 20 && progress < 25) {
+                    statusEl.innerText = "BYPASSING FIREWALL...";
+                    channel.postMessage({ type: 'ATTACK_STATUS', status: "Firewall heuristic bypassed.", severity: 'warn' });
+                } else if (progress > 50 && progress < 55) {
+                    statusEl.innerText = "INJECTING PAYLOAD...";
+                    statusEl.style.color = "var(--main-yellow)";
+                    channel.postMessage({ type: 'ATTACK_STATUS', status: `Injecting ${payload.method} payload...`, severity: 'warn' });
+                } else if (progress > 80 && progress < 85) {
+                    statusEl.innerText = "DECRYPTING DATABASE...";
+                    channel.postMessage({ type: 'ATTACK_STATUS', status: "Brute-forcing encryption keys...", severity: 'warn' });
+                }
+
+                // Selesai
+                if(progress === 100) {
+                    clearInterval(attackInterval);
+                    statusEl.innerText = "ACCESS GRANTED. DATA EXFILTRATION COMPLETE.";
+                    statusEl.style.color = "var(--main-lime)";
+                    document.querySelector('.modal-title').innerText = "SYSTEM COMPROMISED";
+                    document.querySelector('.modal-title').style.color = "var(--main-lime)";
+                    document.querySelector('.progress-bar').style.background = "var(--main-lime)";
+                    
+                    channel.postMessage({ type: 'ATTACK_STATUS', status: "CRITICAL: TARGET DOWN. EXFILTRATION SUCCESSFUL.", severity: 'success' });
+
+                    // Tutup modal setelah 4 detik
+                    setTimeout(() => {
+                        modal.style.display = 'none';
+                        radar.style.display = 'block';
+                        // Reset style untuk serangan berikutnya
+                        document.querySelector('.modal-title').innerText = "SYSTEM COMPROMISE INITIATED";
+                        document.querySelector('.modal-title').style.color = "var(--main-red)";
+                        document.querySelector('.progress-bar').style.background = "var(--main-red)";
+                    }, 4000);
+                }
+            }, 100);
+        }
+
+        /* =========================================
+           4. GLOBAL WARNING SEQUENCE
+           ========================================= */
+        function triggerGlobalWarning() {
+            document.body.classList.add('warning-mode');
+            const modal = document.getElementById('warning-modal');
+            const countdownEl = document.getElementById('countdown');
+            
+            document.getElementById('main-radar').style.display = 'none';
+            document.getElementById('attack-modal').style.display = 'none';
+            modal.style.display = 'flex';
+
+            let timer = 10.00;
+            const destructInterval = setInterval(() => {
+                timer -= 0.01;
+                if(timer <= 0) {
+                    timer = 0;
+                    clearInterval(destructInterval);
+                    countdownEl.innerText = "SYSTEM TERMINATED";
+                    channel.postMessage({ type: 'ATTACK_STATUS', status: "SYSTEM PURGED.", severity: 'error' });
+                    // Animasi mati total
+                    document.body.innerHTML = "<h1 style='color:red; text-align:center; margin-top:40vh;'>SYSTEM OFFLINE</h1>";
+                } else {
+                    countdownEl.innerText = timer.toFixed(2);
+                }
+            }, 10);
+        }
+
+        /* =========================================
+           5. JAM DIGITAL
+           ========================================= */
+        setInterval(() => {
+            document.getElementById('clock').innerText = new Date().toLocaleTimeString('en-GB');
+        }, 1000);
+
+    </script>
+</body>
+</html>
