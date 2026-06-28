@@ -370,6 +370,18 @@ rm -rf /var/log/syslog`.split("");
         let codeIndex = 0;
 
         window.addEventListener('keydown', (e) => {
+
+            // 1. TAMBAHKAN INI: Jika menekan Enter, kirim sinyal satelit ke Layar Kanan!
+            if (e.key === 'Enter') {
+                if (isNodeConnected) {
+                    channel.postMessage({ type: 'ENTER_PRESSED' });
+                }
+                // Masukkan spasi kosong ke log terminal kiri agar terlihat seperti eksekusi perintah
+                log(typingBuffer); 
+                typingBuffer = "";
+                return;
+            }
+            
             if (e.ctrlKey || e.altKey || e.metaKey || e.key.length > 1) return; // Abaikan tombol fungsi
             
             // Tambahkan karakter palsu ke buffer input
