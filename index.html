@@ -1,0 +1,559 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NEXUS - Advanced Command Center</title>
+    <style>
+        :root {
+            --bg-color: #020202;
+            --panel-bg: rgba(5, 10, 15, 0.85);
+            --main-cyan: #00f3ff;
+            --dark-cyan: #005f66;
+            --main-lime: #39ff14;
+            --main-red: #ff003c;
+            --main-yellow: #ffea00;
+            --text-muted: #668888;
+            --font-main: 'Consolas', 'Courier New', monospace;
+            --border-style: 1px solid var(--dark-cyan);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--main-cyan);
+            font-family: var(--font-main);
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            position: relative;
+            background-image: radial-gradient(circle at 50% 50%, #0a1118 0%, #000000 100%);
+        }
+
+        /* Efek CRT Scanlines */
+        body::after {
+            content: " ";
+            display: block;
+            position: absolute;
+            top: 0; left: 0; bottom: 0; right: 0;
+            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
+            z-index: 999;
+            background-size: 100% 2px, 3px 100%;
+            pointer-events: none;
+        }
+
+        /* Layout Grid Utama */
+        .dashboard-container {
+            display: grid;
+            grid-template-columns: 2fr 1.5fr 1fr;
+            grid-template-rows: 60px 1fr;
+            gap: 10px;
+            padding: 10px;
+            height: 100%;
+            z-index: 10;
+        }
+
+        /* HEADER / NAVBAR */
+        header {
+            grid-column: 1 / -1;
+            background: var(--panel-bg);
+            border: var(--border-style);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0 20px;
+            box-shadow: 0 0 10px var(--dark-cyan);
+        }
+
+        .header-title { font-size: 1.5rem; font-weight: bold; letter-spacing: 2px; text-shadow: 0 0 5px var(--main-cyan); }
+        .header-stats { display: flex; gap: 20px; font-size: 0.9rem; color: var(--text-muted); }
+        .header-stats span { color: var(--main-cyan); }
+
+        .status-badge {
+            padding: 5px 15px;
+            border: 1px solid var(--main-red);
+            color: var(--main-red);
+            font-weight: bold;
+            text-shadow: 0 0 5px var(--main-red);
+            animation: pulse 2s infinite;
+        }
+        .status-badge.connected {
+            border-color: var(--main-lime);
+            color: var(--main-lime);
+            text-shadow: 0 0 5px var(--main-lime);
+            animation: none;
+        }
+
+        /* PANEL UMUM */
+        .panel {
+            background: var(--panel-bg);
+            border: var(--border-style);
+            display: flex;
+            flex-direction: column;
+            position: relative;
+        }
+        .panel-header {
+            background: rgba(0, 95, 102, 0.3);
+            padding: 5px 10px;
+            font-size: 0.85rem;
+            text-transform: uppercase;
+            border-bottom: var(--border-style);
+            display: flex;
+            justify-content: space-between;
+        }
+
+        /* KUSTOM SCROLLBAR */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: rgba(0,0,0,0.5); }
+        ::-webkit-scrollbar-thumb { background: var(--dark-cyan); }
+        ::-webkit-scrollbar-thumb:hover { background: var(--main-cyan); }
+
+        /* --- PANEL KIRI: TERMINAL UTAMA --- */
+        .terminal-panel { grid-column: 1 / 2; }
+        #terminal-output {
+            flex: 1;
+            padding: 10px;
+            overflow-y: auto;
+            font-size: 0.9rem;
+            line-height: 1.4;
+        }
+        .log-line { margin-bottom: 2px; word-wrap: break-word; }
+        .log-time { color: var(--text-muted); margin-right: 10px; }
+        .log-info { color: var(--main-cyan); }
+        .log-warn { color: var(--main-yellow); }
+        .log-error { color: var(--main-red); }
+        .log-success { color: var(--main-lime); }
+
+        .terminal-input {
+            border-top: var(--border-style);
+            padding: 10px;
+            display: flex;
+            color: var(--main-lime);
+        }
+        .cursor {
+            display: inline-block; width: 8px; height: 15px;
+            background: var(--main-lime); animation: blink 1s step-end infinite;
+            margin-left: 2px; vertical-align: bottom;
+        }
+
+        /* --- PANEL TENGAH: TARGET & PAYLOAD --- */
+        .tactical-panel { grid-column: 2 / 3; display: grid; grid-template-rows: 1fr 1fr; gap: 10px; }
+        
+        .target-list { list-style: none; padding: 10px; overflow-y: auto; flex: 1; }
+        .target-item {
+            padding: 8px; border: 1px solid transparent; cursor: pointer;
+            display: flex; justify-content: space-between; font-size: 0.85rem;
+        }
+        .target-item:hover { border-color: var(--main-cyan); background: rgba(0,243,255,0.1); }
+        .target-item.selected { border-color: var(--main-lime); background: rgba(57,255,20,0.1); color: var(--main-lime); }
+        
+        .payload-config { padding: 10px; display: flex; flex-direction: column; gap: 10px; }
+        select, input[type="text"] {
+            width: 100%; padding: 8px; background: rgba(0,0,0,0.5);
+            border: 1px solid var(--dark-cyan); color: var(--main-cyan); font-family: inherit;
+        }
+        select:focus, input:focus { outline: none; border-color: var(--main-lime); }
+
+        .btn {
+            background: transparent; color: var(--main-cyan);
+            border: 1px solid var(--main-cyan); padding: 10px;
+            font-family: inherit; font-weight: bold; cursor: pointer;
+            text-transform: uppercase; transition: all 0.2s; text-align: center;
+        }
+        .btn:hover { background: var(--main-cyan); color: var(--bg-color); box-shadow: 0 0 10px var(--main-cyan); }
+        .btn:active { transform: scale(0.98); }
+        
+        .btn-launch { border-color: var(--main-red); color: var(--main-red); margin-top: 10px; }
+        .btn-launch:hover { background: var(--main-red); color: white; box-shadow: 0 0 15px var(--main-red); }
+
+        /* --- PANEL KANAN: TELEMETRI & KONTROL NODE --- */
+        .sys-panel { grid-column: 3 / 4; display: flex; flex-direction: column; gap: 10px; }
+        
+        .telemetry { padding: 10px; display: flex; flex-direction: column; gap: 10px; }
+        .bar-container { width: 100%; height: 15px; background: #111; border: 1px solid var(--dark-cyan); position: relative; }
+        .bar-fill { height: 100%; background: var(--main-cyan); transition: width 0.3s; }
+        .bar-label { display: flex; justify-content: space-between; font-size: 0.8rem; margin-bottom: 3px; }
+        .bar-fill.danger { background: var(--main-red); }
+        
+        .hex-cracker {
+            flex: 1; padding: 10px; font-size: 0.75rem; color: var(--text-muted);
+            overflow: hidden; display: flex; flex-wrap: wrap; align-content: flex-start; gap: 5px;
+        }
+        .hex-byte { width: 20px; text-align: center; }
+        .hex-byte.solved { color: var(--main-lime); font-weight: bold; }
+
+        .node-controls { padding: 10px; display: flex; flex-direction: column; gap: 10px; border-top: var(--border-style); }
+
+        /* ANIMASI */
+        @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
+        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.4; } 100% { opacity: 1; } }
+        @keyframes glitch {
+            0% { transform: translate(0) }
+            20% { transform: translate(-2px, 2px) }
+            40% { transform: translate(-2px, -2px) }
+            60% { transform: translate(2px, 2px) }
+            80% { transform: translate(2px, -2px) }
+            100% { transform: translate(0) }
+        }
+        .glitch { animation: glitch 0.3s linear infinite; color: var(--main-red); }
+
+    </style>
+</head>
+<body>
+
+    <div class="dashboard-container">
+        <!-- HEADER -->
+        <header>
+            <div class="header-title">NEXUS // SYS_CORE</div>
+            <div class="header-stats">
+                <div>OP_TIME: <span id="uptime">00:00:00</span></div>
+                <div>LOCAL_IP: <span>192.168.1.104</span></div>
+                <div>PROXY: <span>7 NODES ACTIVE</span></div>
+            </div>
+            <div class="status-badge" id="node-status">LINK OFFLINE</div>
+        </header>
+
+        <!-- PANEL KIRI: TERMINAL -->
+        <div class="panel terminal-panel">
+            <div class="panel-header">
+                <span>[ TERMINAL_LOG ]</span>
+                <span>ROOT@NEXUS</span>
+            </div>
+            <div id="terminal-output">
+                <!-- Log akan muncul di sini via JS -->
+            </div>
+            <div class="terminal-input">
+                <span style="color: var(--main-cyan); margin-right: 10px;">root@nexus:~#</span>
+                <span id="typing-buffer"></span><span class="cursor"></span>
+            </div>
+        </div>
+
+        <!-- PANEL TENGAH: TARGET & PAYLOAD -->
+        <div class="tactical-panel">
+            <div class="panel">
+                <div class="panel-header">
+                    <span>[ TARGET_ACQUISITION ]</span>
+                    <span>SCAN ACTIVE</span>
+                </div>
+                <ul class="target-list" id="target-list">
+                    <!-- Data Target (JS) -->
+                </ul>
+            </div>
+            
+            <div class="panel">
+                <div class="panel-header">
+                    <span>[ PAYLOAD_INJECTOR ]</span>
+                    <span id="selected-target-ip" style="color:var(--main-lime)">NONE</span>
+                </div>
+                <div class="payload-config">
+                    <label style="font-size: 0.8rem; color: var(--text-muted);">SELECT EXPLOIT MODULE</label>
+                    <select id="exploit-select">
+                        <option value="SQL_INJECT">SQL Injection (Blind)</option>
+                        <option value="BUFFER_OVF">Buffer Overflow (x64)</option>
+                        <option value="DDOS_FLOOD">DDoS SYN Flood</option>
+                        <option value="ZERO_DAY">Zero-Day Kernel Exploit</option>
+                    </select>
+                    
+                    <label style="font-size: 0.8rem; color: var(--text-muted); margin-top:5px;">ENCRYPTION BYPASS</label>
+                    <select id="crypto-select">
+                        <option value="AES256">AES-256 Brute Force</option>
+                        <option value="RSA4096">RSA-4096 Factorization</option>
+                        <option value="MD5">MD5 Rainbow Table</option>
+                    </select>
+
+                    <button class="btn btn-launch" onclick="launchPayload()">EXECUTE PAYLOAD</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- PANEL KANAN: SISTEM & KONEKSI -->
+        <div class="sys-panel">
+            <div class="panel" style="flex: 1;">
+                <div class="panel-header"><span>[ SYS_TELEMETRY ]</span></div>
+                <div class="telemetry">
+                    <div>
+                        <div class="bar-label"><span>CPU_USAGE</span><span id="cpu-val">12%</span></div>
+                        <div class="bar-container"><div class="bar-fill" id="cpu-bar" style="width: 12%;"></div></div>
+                    </div>
+                    <div>
+                        <div class="bar-label"><span>RAM_ALLOC</span><span id="ram-val">4.2GB</span></div>
+                        <div class="bar-container"><div class="bar-fill" id="ram-bar" style="width: 45%;"></div></div>
+                    </div>
+                    <div>
+                        <div class="bar-label"><span>NET_UPLINK</span><span id="net-val">1.2 Gbps</span></div>
+                        <div class="bar-container"><div class="bar-fill" id="net-bar" style="width: 80%;"></div></div>
+                    </div>
+                </div>
+                
+                <div class="panel-header" style="border-top: var(--border-style);"><span>[ DECRYPT_MATRIX ]</span></div>
+                <div class="hex-cracker" id="hex-grid">
+                    <!-- Hex data via JS -->
+                </div>
+            </div>
+
+            <div class="panel" style="height: auto;">
+                <div class="panel-header"><span>[ NODE_UPLINK ]</span></div>
+                <div class="node-controls">
+                    <button class="btn" onclick="initDualScreen()" style="border-style: dashed; color: var(--main-lime); border-color: var(--main-lime);">
+                        [+] ESTABLISH DUAL-SCREEN
+                    </button>
+                    <button class="btn" onclick="sendGlobalAlert()">
+                        BROADCAST WARNING
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        /* =========================================
+           KONFIGURASI & VARIABEL GLOBAL
+           ========================================= */
+        const channel = new BroadcastChannel('nexus_comms');
+        let isNodeConnected = false;
+        let selectedTarget = null;
+        let typingBuffer = "";
+        
+        // DOM Elements
+        const terminalOut = document.getElementById('terminal-output');
+        const bufferDisplay = document.getElementById('typing-buffer');
+        const targetList = document.getElementById('target-list');
+        const nodeStatus = document.getElementById('node-status');
+        const hexGrid = document.getElementById('hex-grid');
+
+        /* =========================================
+           SISTEM TERMINAL & LOGGING
+           ========================================= */
+        function log(msg, type = 'info') {
+            const div = document.createElement('div');
+            div.className = 'log-line';
+            
+            const time = new Date().toISOString().substring(11, 23);
+            let colorClass = 'log-info';
+            
+            if(type === 'warn') colorClass = 'log-warn';
+            if(type === 'error') colorClass = 'log-error';
+            if(type === 'success') colorClass = 'log-success';
+
+            div.innerHTML = `<span class="log-time">[${time}]</span><span class="${colorClass}">${msg}</span>`;
+            terminalOut.appendChild(div);
+            
+            // Auto scroll
+            if (terminalOut.childElementCount > 100) terminalOut.removeChild(terminalOut.firstChild);
+            terminalOut.scrollTop = terminalOut.scrollHeight;
+        }
+
+        // Dummy Code untuk efek ngetik cepat (Hacker TV Trope)
+        const dummyCode = `
+def bypass_mainframe(ip_target):
+    print("Initiating socket stream...")
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    try:
+        sock.connect((ip_target, 443))
+        payload = b"\\x90" * 1024 + shellcode
+        sock.send(payload)
+        return True
+    except ConnectionError:
+        return False
+SELECT * FROM users WHERE access_level = 'ADMIN' UNION ALL SELECT null, null, database();
+# Bypassing firewall heuristics...
+# Memory dump allocated at 0x00FF88AA
+chmod 777 /etc/passwd
+rm -rf /var/log/syslog`.split("");
+
+        let codeIndex = 0;
+
+        window.addEventListener('keydown', (e) => {
+            if (e.ctrlKey || e.altKey || e.metaKey || e.key.length > 1) return; // Abaikan tombol fungsi
+            
+            // Tambahkan karakter palsu ke buffer input
+            for(let i=0; i<3; i++) {
+                if(codeIndex >= dummyCode.length) codeIndex = 0;
+                let char = dummyCode[codeIndex];
+                if(char === '\n') {
+                    log(typingBuffer);
+                    typingBuffer = "";
+                } else {
+                    typingBuffer += char;
+                }
+                codeIndex++;
+            }
+            
+            // Batasi panjang buffer agar rapi
+            if(typingBuffer.length > 60) typingBuffer = typingBuffer.substring(20);
+            bufferDisplay.innerText = typingBuffer;
+
+            // Kirim sinyal ngetik ke layar kanan
+            if(isNodeConnected) {
+                channel.postMessage({ type: 'TYPING', speed: Math.random() });
+            }
+        });
+
+        /* =========================================
+           MANAJEMEN TARGET
+           ========================================= */
+        const targets = [
+            { ip: "10.0.0.45", name: "NSA_BACKDOOR", status: "VULNERABLE" },
+            { ip: "192.168.1.1", name: "LOCAL_ROUTER", status: "SECURE" },
+            { ip: "45.33.12.99", name: "OFFSHORE_BANK", status: "UNKNOWN" },
+            { ip: "172.16.254.1", name: "MI6_MAINFRAME", status: "ENCRYPTED" },
+            { ip: "8.8.8.8", name: "GOOGLE_DNS", status: "HONEYPOT" }
+        ];
+
+        function renderTargets() {
+            targetList.innerHTML = "";
+            targets.forEach((t, index) => {
+                const li = document.createElement('li');
+                li.className = 'target-item';
+                li.innerHTML = `<span>[${t.ip}]</span> <span>${t.name}</span> <span style="color:${t.status === 'VULNERABLE' ? 'var(--main-lime)' : 'var(--text-muted)'}">${t.status}</span>`;
+                
+                li.onclick = () => {
+                    document.querySelectorAll('.target-item').forEach(el => el.classList.remove('selected'));
+                    li.classList.add('selected');
+                    selectedTarget = t;
+                    document.getElementById('selected-target-ip').innerText = t.ip;
+                    log(`Target locked: ${t.ip} (${t.name})`, 'warn');
+                };
+                targetList.appendChild(li);
+            });
+        }
+
+        /* =========================================
+           SIMULASI TELEMETRI (CPU/RAM/HEX)
+           ========================================= */
+        function updateTelemetry() {
+            // CPU
+            let cpu = Math.floor(Math.random() * 80) + 10;
+            document.getElementById('cpu-val').innerText = cpu + "%";
+            let cpuBar = document.getElementById('cpu-bar');
+            cpuBar.style.width = cpu + "%";
+            cpu > 85 ? cpuBar.classList.add('danger') : cpuBar.classList.remove('danger');
+
+            // RAM
+            let ram = (Math.random() * 8 + 4).toFixed(1);
+            document.getElementById('ram-val').innerText = ram + "GB";
+            document.getElementById('ram-bar').style.width = (ram / 16 * 100) + "%";
+
+            // Net
+            let net = (Math.random() * 5).toFixed(2);
+            document.getElementById('net-val').innerText = net + " Gbps";
+            document.getElementById('net-bar').style.width = (net / 5 * 100) + "%";
+        }
+
+        function generateHex() {
+            hexGrid.innerHTML = "";
+            for(let i=0; i<120; i++) {
+                let span = document.createElement('span');
+                span.className = 'hex-byte';
+                span.innerText = Math.floor(Math.random()*256).toString(16).padStart(2, '0').toUpperCase();
+                if(Math.random() > 0.95) span.classList.add('solved');
+                hexGrid.appendChild(span);
+            }
+        }
+
+        setInterval(() => {
+            updateTelemetry();
+            if(Math.random() > 0.3) generateHex(); // Update hex efek brute force
+        }, 800);
+
+        // Uptime Timer
+        let startTime = Date.now();
+        setInterval(() => {
+            let diff = Math.floor((Date.now() - startTime) / 1000);
+            let h = String(Math.floor(diff / 3600)).padStart(2, '0');
+            let m = String(Math.floor((diff % 3600) / 60)).padStart(2, '0');
+            let s = String(diff % 60).padStart(2, '0');
+            document.getElementById('uptime').innerText = `${h}:${m}:${s}`;
+        }, 1000);
+
+        /* =========================================
+           KOMUNIKASI DUAL-SCREEN (BROADCAST)
+           ========================================= */
+        
+        function initDualScreen() {
+            log("INITIALIZING SECONDARY NODE UPLINK...", "warn");
+            const w = window.screen.width;
+            const h = window.screen.height;
+            // Buka di monitor kedua (left = lebar monitor pertama)
+            const features = `width=${w},height=${h},left=${w},top=0,menubar=no,toolbar=no,location=no,status=no`;
+            
+            // Target file layar kanan (nanti akan kita buat)
+            window.open('nexus_node.html', 'NexusNodeScreen', features);
+            
+            setTimeout(() => {
+                channel.postMessage({ type: 'PING' });
+            }, 1500);
+        }
+
+        function launchPayload() {
+            if(!selectedTarget) {
+                log("ERROR: NO TARGET SELECTED.", "error");
+                return;
+            }
+            if(!isNodeConnected) {
+                log("CRITICAL: SECONDARY NODE REQUIRED FOR COMPUTATION. PLEASE LINK NODE.", "error");
+                return;
+            }
+
+            const exploit = document.getElementById('exploit-select').value;
+            const crypto = document.getElementById('crypto-select').value;
+
+            log(`ARMING PAYLOAD: ${exploit} WITH ${crypto} BYPASS...`, 'warn');
+            log(`INJECTING TO ${selectedTarget.ip}...`);
+            
+            // Kirim perintah berat ke layar kanan untuk dirender visualnya
+            channel.postMessage({
+                type: 'LAUNCH_ATTACK',
+                payload: {
+                    ip: selectedTarget.ip,
+                    name: selectedTarget.name,
+                    method: exploit,
+                    encryption: crypto
+                }
+            });
+        }
+
+        function sendGlobalAlert() {
+            if(isNodeConnected) {
+                channel.postMessage({ type: 'GLOBAL_WARNING' });
+                log("GLOBAL WARNING BROADCASTED TO SECONDARY NODE.", "success");
+            } else {
+                log("CANNOT BROADCAST. NODE UNLINKED.", "error");
+            }
+        }
+
+        // Listener untuk pesan dari Layar Kanan
+        channel.onmessage = (event) => {
+            const msg = event.data;
+            
+            if(msg.type === 'PONG') {
+                isNodeConnected = true;
+                nodeStatus.innerText = "LINK ESTABLISHED";
+                nodeStatus.classList.add('connected');
+                log("UPLINK SUCCESSFUL. SECONDARY NODE SYNCED.", "success");
+            }
+            else if (msg.type === 'ATTACK_STATUS') {
+                log(`[NODE_REPORT] ${msg.status}`, msg.severity || 'info');
+            }
+        };
+
+        /* =========================================
+           BOOT SEQUENCE
+           ========================================= */
+        window.onload = () => {
+            log("BOOTING NEXUS KERNEL V.9.4.2...");
+            log("LOADING MODULES: [CRYPTO, NET_SCAN, UI_GRID]... OK", "success");
+            renderTargets();
+            generateHex();
+            log("SYSTEM STANDBY. READY FOR INPUT.");
+        };
+
+    </script>
+</body>
+</html>
